@@ -1,0 +1,16 @@
+#!/bin/bash
+#PBS -N osrm_prep
+#PBS -q debug-g
+#PBS -l select=1
+#PBS -l walltime=00:30:00
+#PBS -W group_list=gr61
+#PBS -j oe
+# OSRM前処理 (extract -> partition -> customize)。Triple-BERT/data に new-york-latest.osm.pbf が必要。
+set -eu
+module load apptainer
+SIF="$HOME/tb/osrm.sif"
+cd "$HOME/tb/my-Triple-BERT/data"
+apptainer exec "$SIF" osrm-extract -p /opt/car.lua new-york-latest.osm.pbf
+apptainer exec "$SIF" osrm-partition new-york-latest.osrm
+apptainer exec "$SIF" osrm-customize new-york-latest.osrm
+echo "done"

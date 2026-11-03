@@ -1,0 +1,27 @@
+#!/bin/bash
+#PBS -N triple_bert_eval
+#PBS -q debug-g
+#PBS -l select=1
+#PBS -l walltime=00:30:00
+#PBS -W group_list=gr61
+#PBS -j oe
+# OSRMをバックグラウンド起動(ポート6000)してから finetune/eval.py を実行する。
+set -eu
+module load apptainer
+SIF="$HOME/tb/osrm.sif"
+REPO="$HOME/tb/my-Triple-BERT"
+cd "$REPO"
+
+apptainer exec "$SIF" osrm-routed --algorithm mld --port 6000 data/new-york-latest.osrm > osrm.log 2>&1 &
+OSRM_PID=$!
+trap 'kill $OSRM_PID 2>/dev/null || true' EXIT
+
+# OSRMの起動待ち(最大2分)
+for i in $(seq 1 60); do
+  if curl -s "http://localhost:6000/route/v1/driving/-73.98,40.75;-73.97,40.76" | grep -q '"Ok"'; then break; fi
+  sleep 2
+done
+
+source "$HOME/tb/venv/bin/activate"
+cd finetune
+python eval.py --bi_direction --model_path ../parameters/stage2/best.pth --njobs 24

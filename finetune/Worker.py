@@ -247,8 +247,9 @@ class Worker():
 
     def load(self, path1=None, device=torch.device("cpu")):
         if path1 is not None:
-            self.Q_target.load_state_dict(torch.load(path1), map_location=device, strict=False)
-            self.Q_training.load_state_dict(torch.load(path1), map_location=device, strict=False)
+            state_dict = torch.load(path1, map_location=device, weights_only=True)
+            self.AC_target.load_state_dict(state_dict)
+            self.AC_training.load_state_dict(state_dict)
 
     def load_pretrain(self, path1=None, device=torch.device("cpu")):
         if path1 is not None:

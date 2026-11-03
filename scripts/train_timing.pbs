@@ -1,0 +1,63 @@
+#!/bin/bash
+#PBS -N train_timing
+#PBS -q debug-g
+#PBS -l select=1
+#PBS -l walltime=00:30:00
+#PBS -W group_list=gr61
+#PBS -j oe
+#PBS -o logs/
+#PBS -m ae
+# Stage2(finetune/train.py)の所要時間測定用ジョブ。制限時間つきで学習を回し、1エピソードあたりの時間を見積もる。
+# 宛先は公開リポジトリに残さないよう、投入時に指定する: qsub -M <アドレス> scripts/train_timing.pbs
+# Stage1の重みを変える場合: qsub -v PRETRAIN=/path/to/stage1.pth scripts/train_timing.pbs
+set -eu
+module load apptainer
+SIF="$HOME/tb/osrm.sif"
+REPO="$HOME/tb/my-Triple-BERT"
+PRETRAIN="${PRETRAIN:-$REPO/parameters/stage1/best.pth}"
+
+# train.py は train.txt / eval.txt / latest.pth / best.pth をカレントに書き出すので、リポジトリ外の専用ディレクトリで実行する
+RUN_DIR="$HOME/tb/runs/timing_${PBS_JOBID%%.*}"
+mkdir -p "$RUN_DIR"
+cd "$RUN_DIR"
+
+source "$HOME/tb/venv/bin/activate"
+{
+  echo "job: $PBS_JOBID  host: $(hostname)  run_dir: $RUN_DIR"
+  nvidia-smi -L || true
+  python -c "import torch; print('cuda available:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')"
+} | tee -a timing.log
+
+apptainer exec "$SIF" osrm-routed --algorithm mld --port 6000 "$REPO/data/new-york-latest.osrm" > osrm.log 2>&1 &
+OSRM_PID=$!
+
+# 60秒ごとに完了エピソード数(train.txtの行数)を記録する
+(
+  while true; do
+    sleep 60
+    if [ -f train.txt ]; then n=$(wc -l < train.txt); else n=0; fi
+    echo "$(date +%T) epochs_done=$n" >> timing.log
+  done
+) &
+MON_PID=$!
+trap 'kill $OSRM_PID $MON_PID 2>/dev/null || true' EXIT
+
+# OSRMの起動待ち(最大2分)
+for i in $(seq 1 60); do
+  if curl -s "http://localhost:6000/route/v1/driving/-73.98,40.75;-73.97,40.76" | grep -q '"Ok"'; then break; fi
+  sleep 2
+done
+
+START=$(date +%s)
+echo "train start: $(date +%T)" >> timing.log
+timeout 24m python "$REPO/finetune/train.py" --bi_direction --njobs 24 \
+  --pretrain_model_path "$PRETRAIN" \
+  --demand_path "$REPO/data/yellow_tripdata_2024-07.parquet" \
+  --zone_dic_path "$REPO/data/Manhattan_dic.pkl" || true
+END=$(date +%s)
+
+if [ -f train.txt ]; then n=$(wc -l < train.txt); else n=0; fi
+echo "train end: $(date +%T)  elapsed=$((END-START))s  epochs_done=$n" | tee -a timing.log
+if [ "$n" -gt 0 ]; then
+  echo "approx sec/epoch (incl. startup and evals): $(( (END-START) / n ))" | tee -a timing.log
+fi

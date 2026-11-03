@@ -141,6 +141,8 @@ def main():
         with open("train.txt", 'a') as file:
             file.write(log + "\n")
         worker.save("latest.pth")
+        if j % 100 == 0:
+            worker.save(f"ckpt_{j}.pth")
 
         if j % args.eval_episode == 0 :
             worker.reset(train=False)

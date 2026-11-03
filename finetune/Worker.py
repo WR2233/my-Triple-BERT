@@ -248,8 +248,14 @@ class Worker():
     def load(self, path1=None, device=torch.device("cpu")):
         if path1 is not None:
             state_dict = torch.load(path1, map_location=device, weights_only=True)
-            self.AC_target.load_state_dict(state_dict)
-            self.AC_training.load_state_dict(state_dict)
+            # AC_BERT.__init__ deletes word/position embeddings of the BERTs (inputs_embeds is used instead),
+            # but checkpoints may still contain them, so only these unused keys are tolerated.
+            ignorable = ("word_embeddings", "position_embeddings")
+            for net in (self.AC_target, self.AC_training):
+                result = net.load_state_dict(state_dict, strict=False)
+                bad_unexpected = [k for k in result.unexpected_keys if not any(s in k for s in ignorable)]
+                if result.missing_keys or bad_unexpected:
+                    raise RuntimeError(f"state_dict mismatch: missing={result.missing_keys}, unexpected={bad_unexpected}")
 
     def load_pretrain(self, path1=None, device=torch.device("cpu")):
         if path1 is not None:

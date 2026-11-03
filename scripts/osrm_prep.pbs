@@ -5,6 +5,7 @@
 #PBS -l walltime=00:30:00
 #PBS -W group_list=gr61
 #PBS -j oe
+#PBS -o logs/
 # OSRM前処理 (extract -> partition -> customize)。Triple-BERT/data に new-york-latest.osm.pbf が必要。
 set -eu
 module load apptainer

@@ -206,7 +206,9 @@ class Worker():
         if compression:
             max_len = 2200
         else:
-            max_len = 1500
+            # actor input length = workers (1000) + pending orders; early in training the pending orders can exceed 500,
+            # and recent transformers raises an error when seq_length > max_position_embeddings (token_type_ids buffer)
+            max_len = 2500
 
         bertconfig_actor = BertConfig(max_position_embeddings=max_len, hidden_size=64, num_hidden_layers=3, num_attention_heads=4, position_embedding_type="none")
         bertconfig_critic = BertConfig(max_position_embeddings=1000, hidden_size=128, num_hidden_layers=3, num_attention_heads=4, position_embedding_type="none")

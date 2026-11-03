@@ -1,0 +1,62 @@
+#!/bin/bash
+#PBS -N train_stage2
+#PBS -q regular-g
+#PBS -l select=1
+#PBS -l walltime=24:00:00
+#PBS -W group_list=gr61
+#PBS -j oe
+#PBS -o logs/
+#PBS -m ae
+# Stage1の学習済み重みを使ってStage2(finetune/train.py)を学習する。
+# 宛先は公開リポジトリに残さないよう、投入時に指定する:
+#   qsub -M <アドレス> scripts/train_stage2.pbs
+# キュー・walltimeはコマンドラインで上書きできる(上限はMiyabiの案内で要確認):
+#   qsub -q <キュー> -l walltime=HH:MM:SS -M <アドレス> scripts/train_stage2.pbs
+# 実行名/Stage1の重みの変更:
+#   qsub -v RUN_NAME=run2,PRETRAIN=/path/to/stage1.pth ... scripts/train_stage2.pbs
+set -eu
+module load apptainer
+SIF="$HOME/tb/osrm.sif"
+REPO="$HOME/tb/my-Triple-BERT"
+RUN_NAME="${RUN_NAME:-stage2}"
+PRETRAIN="${PRETRAIN:-$REPO/parameters/stage1/best.pth}"
+
+# train.py は train.txt / eval.txt / latest.pth / best.pth をカレントに書き出す。
+# 実行ごとに専用ディレクトリを作る(リポジトリ外。複数回実行してもぶつからない)。
+RUN_DIR="$HOME/tb/runs/${RUN_NAME}_${PBS_JOBID%%.*}"
+mkdir -p "$RUN_DIR"
+cd "$RUN_DIR"
+
+source "$HOME/tb/venv/bin/activate"
+{
+  echo "job: $PBS_JOBID  host: $(hostname)  start: $(date)"
+  echo "commit: $(git -C "$REPO" rev-parse HEAD)  pretrain: $PRETRAIN"
+  nvidia-smi -L || true
+  python -c "import torch; print('cuda available:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')"
+} | tee -a run_info.log
+
+apptainer exec "$SIF" osrm-routed --algorithm mld --port 6000 "$REPO/data/new-york-latest.osrm" > osrm.log 2>&1 &
+OSRM_PID=$!
+
+# 10分ごとに完了エピソード数(train.txtの行数)を記録する
+(
+  while true; do
+    sleep 600
+    if [ -f train.txt ]; then n=$(wc -l < train.txt); else n=0; fi
+    echo "$(date +%F_%T) epochs_done=$n" >> progress.log
+  done
+) &
+MON_PID=$!
+trap 'kill $OSRM_PID $MON_PID 2>/dev/null || true' EXIT
+
+# OSRMの起動待ち(最大2分)
+for i in $(seq 1 60); do
+  if curl -s "http://localhost:6000/route/v1/driving/-73.98,40.75;-73.97,40.76" | grep -q '"Ok"'; then break; fi
+  sleep 2
+done
+
+python "$REPO/finetune/train.py" --bi_direction --njobs 24 \
+  --pretrain_model_path "$PRETRAIN" \
+  --demand_path "$REPO/data/yellow_tripdata_2024-07.parquet" \
+  --zone_dic_path "$REPO/data/Manhattan_dic.pkl"
+echo "finished: $(date)" | tee -a run_info.log

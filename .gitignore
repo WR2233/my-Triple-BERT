@@ -1,0 +1,24 @@
+# macOS / Python
+.DS_Store
+__pycache__/
+*.pyc
+
+# 実行環境
+venv/
+.venv/
+*.sif
+
+# データ (著作権・容量のためリポジトリに含めない)
+data/*.parquet
+data/*.osm.pbf
+data/*.osrm
+data/*.osrm.*
+data/taxi_zones/
+data/taxi_zones.zip
+data/Manhattan_dic.pkl
+
+# 実行ログ・結果
+osrm.log
+finetune/eval_result.txt
+*.o[0-9]*
+*.e[0-9]*

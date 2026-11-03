@@ -27,4 +27,6 @@ done
 
 source "$HOME/tb/venv/bin/activate"
 cd finetune
-python eval.py --bi_direction --model_path ../parameters/stage2/best.pth --njobs 24
+# 時間帯は投入時に変更できる: qsub -v HOURS="19" scripts/eval.pbs (省略時は eval.py と同じ既定値)
+HOURS="${HOURS:-14 17 20 21 22}"
+python eval.py --bi_direction --model_path ../parameters/stage2/best.pth --njobs 24 --hour $HOURS

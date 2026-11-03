@@ -5,6 +5,8 @@
 #PBS -l walltime=00:30:00
 #PBS -W group_list=gr61
 #PBS -j oe
+#PBS -m ae
+# 宛先は公開リポジトリに残さないよう、投入時に指定する: qsub -M <アドレス> scripts/eval.pbs
 # OSRMをバックグラウンド起動(ポート6000)してから finetune/eval.py を実行する。
 set -eu
 module load apptainer

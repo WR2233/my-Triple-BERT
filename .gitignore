@@ -22,6 +22,8 @@ osrm.log
 finetune/eval_result.txt
 *.o[0-9]*
 *.e[0-9]*
+runs/*
+img/*
 
 # PBSジョブのログ (logs/ 配下は <ジョブID>.opbs.OU の名前で出力される)
 logs/*

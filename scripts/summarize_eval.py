@@ -44,7 +44,7 @@ def summarize(label, rows, hours, skip):
     n_rep = len(rows) // n_h
     if n_rep == 0:
         print(f"[{label}] 行数が足りません ({len(rows)} 行 < 時間帯 {n_h} 個)")
-        return
+        return None
     if len(rows) % n_h:
         print(f"[{label}] 注意: {len(rows)} 行は {n_h} の倍数ではないので、最初の {n_rep * n_h} 行だけを使います")
     rows = rows[: n_rep * n_h]
@@ -64,11 +64,14 @@ def summarize(label, rows, hours, skip):
     print("\n### 全時間帯の平均 (1回分ごとに時間帯平均を取り、繰り返しにわたる 平均 ± 標準偏差) vs 論文 Table 4")
     print("| 指標 | 今回 | 論文 | 差 |")
     print("|---|---|---|---|")
+    overall = {}
     for key in METRICS:
         per_rep = [st.mean(grid[r][j][key] for j in range(n_h)) for r in range(n_rep)]
         m, s = st.mean(per_rep), (st.stdev(per_rep) if n_rep > 1 else 0.0)
+        overall[key] = m
         diff = (m - PAPER[key]) / PAPER[key] * 100
         print(f"| {key} | {fmt(m, s, key)} | {PAPER[key]:g} | {diff:+.1f}% |")
+    return overall
 
 
 def main():
@@ -77,12 +80,24 @@ def main():
     ap.add_argument("--labels", nargs="+", help="表示名 (paths と同じ数)")
     ap.add_argument("--hours", nargs="+", default=["14", "17", "20", "21", "22"], help="1回分の時間帯 (eval.pbs の HOURS)")
     ap.add_argument("--skip", type=int, default=0, help="先頭の無視する行数 (別の実行が混ざっている場合)")
+    ap.add_argument("--table4", action="store_true", help="論文 Table 4 と同じ形式 (小数2桁) の行も出力する")
     args = ap.parse_args()
     if args.labels and len(args.labels) != len(args.paths):
         raise SystemExit("--labels の数は paths と同じにしてください")
+    results = []
     for i, p in enumerate(args.paths):
         label = args.labels[i] if args.labels else str(p)
-        summarize(label, load(Path(p).expanduser()), args.hours, args.skip)
+        res = summarize(label, load(Path(p).expanduser()), args.hours, args.skip)
+        if res:
+            results.append((label, res))
+
+    if args.table4 and results:  # 論文 Table 4 と同じ並びで、小数2桁の行だけを出す
+        print("\n## Table 4 形式 (全時間帯の平均。Service Rate は小数2桁)")
+        print("| Method | " + " | ".join(METRICS) + " |")
+        print("|---|" + "---|" * len(METRICS))
+        for label, res in results:
+            print(f"| {label} | " + " | ".join(f"{res[k]:.2f}" for k in METRICS) + " |")
+        print("| (論文) Triple-BERT | " + " | ".join(f"{PAPER[k]:.2f}" for k in METRICS) + " |")
 
 
 if __name__ == "__main__":

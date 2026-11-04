@@ -52,12 +52,12 @@ GRID = "#e6e5e1"
 # 論文 Fig. 3 の軸範囲 (スクリーンショットの目盛りから読み取った概算値。誤差は数 % 程度)
 PAPER_XLIM = (-50, 1050)
 PAPER_YLIM = {
-    "Reward": (10720, 15580),
-    "Served Order": (3104, 3762),
-    "Delivery Time": (10.36, 13.35),
-    "Detour Time": (2.05, 3.74),
-    "Pickup Time": (5.41, 9.35),
-    "Confirmation Time": (-0.056, 1.11),
+    "Reward": (11000, 16000),
+    "Served Order": (3100, 3800),
+    "Delivery Time": (10.5, 13.5),
+    "Detour Time": (2.1, 3.7),
+    "Pickup Time": (5.0, 10.0),
+    "Confirmation Time": (-0.1, 1.2),
 }
 
 PAIR_RE =re.compile(r"([A-Za-z][A-Za-z ]*?):\s*(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?|nan|inf)")
